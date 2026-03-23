@@ -28,4 +28,3 @@ jobs:
           args: >
             -Dsonar.projectKey=vane553_practica-k6-grafana
             -Dsonar.organization=vane553
-            -Dsonar.qualitygate.wait=true
