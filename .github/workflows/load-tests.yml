@@ -1,0 +1,62 @@
+name: K6 Load Tests -> Grafana Cloud
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  load-test:
+    name: Pruebas de carga con K6
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Crear directorio de resultados
+        run: mkdir -p results
+
+      - name: Instalar K6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring \
+            --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 \
+            --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -q
+          sudo apt-get install k6 -y
+          k6 version
+
+      - name: Ejecutar pruebas K6
+        env:
+          K6_CLOUD_TOKEN:      ${{ secrets.K6_CLOUD_TOKEN }}
+          K6_CLOUD_PROJECT_ID: ${{ secrets.K6_PROJECT_ID }}
+          BASE_URL: 'https://jsonplaceholder.typicode.com'
+        run: |
+          k6 run \
+            --out cloud \
+            --env BASE_URL=$BASE_URL \
+            tests/load-test.js
+
+      - name: Guardar resultados
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-results-run-${{ github.run_number }}
+          path: results/
+          retention-days: 30
+
+      - name: Resumen del pipeline
+        if: always()
+        run: |
+          echo "## Resultados K6 - Run #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Target URL | https://jsonplaceholder.typicode.com |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dashboard | https://fc2022371114.grafana.net/a/k6-app/projects/7068556 |" >> $GITHUB_STEP_SUMMARY
