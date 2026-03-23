@@ -1,0 +1,58 @@
+name: K6 Load Tests → Grafana Cloud
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'URL objetivo (dejar vacío para usar JSONPlaceholder)'
+        required: false
+        default: 'https://jsonplaceholder.typicode.com'
+
+jobs:
+  load-test:
+    name: Pruebas de carga con K6
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: 📁 Crear directorio de resultados
+        run: mkdir -p results
+
+      - name: ⚙️ Configurar K6
+        uses: grafana/setup-k6-action@v1
+
+      - name: 🚀 Ejecutar pruebas K6 → Grafana Cloud
+        uses: grafana/run-k6-action@v1
+        env:
+          K6_CLOUD_TOKEN:      ${{ secrets.K6_CLOUD_TOKEN }}
+          K6_CLOUD_PROJECT_ID: ${{ secrets.K6_PROJECT_ID }}
+          BASE_URL: ${{ github.event.inputs.target_url || 'https://jsonplaceholder.typicode.com' }}
+        with:
+          path: tests/load-test.js
+          cloud-run-locally: false
+
+      - name: 📦 Guardar resultados como artefacto
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-results-run-${{ github.run_number }}
+          path: results/
+          retention-days: 30
+
+      - name: 📝 Resumen en GitHub Actions
+        if: always()
+        run: |
+          echo "## 📊 Resultados K6 - Run #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Target URL | \`${{ env.BASE_URL }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dashboard | [Ver en Grafana Cloud k6](https://app.k6.io/projects/${{ secrets.K6_PROJECT_ID }}) |" >> $GITHUB_STEP_SUMMARY
